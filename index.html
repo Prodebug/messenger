@@ -23,7 +23,6 @@
             display: flex;
             flex-direction: column;
         }
-
         #loginScreen {
             display: flex;
             align-items: center;
@@ -141,7 +140,6 @@
             color: #2563eb;
             background: #dbeafe;
         }
-
         #chatScreen {
             display: none;
             flex-direction: column;
@@ -203,7 +201,6 @@
         .btn-icon:active {
             background: rgba(255, 255, 255, 0.3);
         }
-
         .messages-container {
             flex: 1;
             overflow-y: auto;
@@ -271,7 +268,6 @@
             max-width: 90%;
             font-style: italic;
         }
-
         .chat-footer {
             display: flex;
             align-items: center;
@@ -326,7 +322,6 @@
         .btn-send:active {
             background: #5a52d5;
         }
-
         .modal {
             position: fixed;
             top: 0;
@@ -413,7 +408,6 @@
         .emoji-btn:active {
             background: #e5e7eb;
         }
-
         .share-buttons {
             display: flex;
             gap: 6px;
@@ -428,7 +422,6 @@
             text-align: center;
             border-radius: 10px;
         }
-
         @media (max-width: 480px) {
             .login-container {
                 padding: 20px 16px;
@@ -518,7 +511,6 @@
     </style>
 </head>
 <body>
-
     <!-- ЭКРАН ВХОДА -->
     <div id="loginScreen">
         <div class="login-container">
@@ -541,11 +533,10 @@
                 <div id="statusMessage" class="status-message"></div>
             </div>
             <div style="margin-top:14px;text-align:center;font-size:11px;color:#9ca3af;">
-                💡 Сообщения синхронизируются через сеть
+                💡 Сообщения синхронизируются через сеть и сохраняются
             </div>
         </div>
     </div>
-
     <!-- ЭКРАН ЧАТА -->
     <div id="chatScreen">
         <div class="chat-header">
@@ -571,7 +562,6 @@
             <button class="btn-send" onclick="sendMessage()">📤</button>
         </div>
     </div>
-
     <!-- МОДАЛЬНОЕ ОКНО -->
     <div id="modal" class="modal">
         <div class="modal-content">
@@ -582,12 +572,18 @@
             <div id="modalBody" class="modal-body"></div>
         </div>
     </div>
-
     <script>
         // ============================================================
-        // 1. ПОДКЛЮЧЕНИЕ GUN.JS
+        // 1. ПОДКЛЮЧЕНИЕ GUN.JS (с публичными relay-пирами)
         // ============================================================
-        var gun = Gun();
+        // Без peers сообщения не синхронизируются между разными браузерами/устройствами
+        var gun = Gun({
+            peers: [
+                'https://gun-manhattan.herokuapp.com/gun',
+                'https://peer.wallie.io/gun',
+                'https://gunjs.herokuapp.com/gun'
+            ]
+        });
 
         // ============================================================
         // 2. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
@@ -595,31 +591,44 @@
         var username = '';
         var roomId = '';
         var messagesRef = null;
-        var listener = null;
+        var seenIds = {};          // чтобы не показывать одно и то же сообщение дважды
+        var isListening = false;
 
         // ============================================================
         // 3. ФУНКЦИИ ВХОДА / СОЗДАНИЯ
         // ============================================================
         function createRoom() {
             username = document.getElementById('usernameInput').value.trim();
-            if (!username) { showStatus('❌ Введите имя', 'error'); return; }
+            if (!username) {
+                showStatus('❌ Введите имя', 'error');
+                return;
+            }
             var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             var code = '';
-            for (var i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            for (var i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
             roomId = code;
             localStorage.setItem('chat_room', roomId);
             localStorage.setItem('chat_username', username);
             enterChat();
             addSystemMessage('✅ Комната создана! Код: ' + roomId);
-            addSystemMessage('📤 Отправьте ссылку друзьям');
+            addSystemMessage('📤 Отправьте ссылку или код друзьям');
+            listenMessages();          // ← важно! раньше не вызывалось
             setTimeout(showRoomShare, 800);
         }
 
         function joinRoom() {
             username = document.getElementById('usernameInput').value.trim();
             roomId = document.getElementById('roomInput').value.trim().toUpperCase();
-            if (!username) { showStatus('❌ Введите имя', 'error'); return; }
-            if (!roomId) { showStatus('❌ Введите код комнаты', 'error'); return; }
+            if (!username) {
+                showStatus('❌ Введите имя', 'error');
+                return;
+            }
+            if (!roomId) {
+                showStatus('❌ Введите код комнаты', 'error');
+                return;
+            }
             localStorage.setItem('chat_room', roomId);
             localStorage.setItem('chat_username', username);
             enterChat();
@@ -633,40 +642,42 @@
             document.getElementById('chatTitle').textContent = '💬 Комната ' + roomId;
             document.getElementById('roomCode').textContent = '📋 ' + roomId;
             document.getElementById('messagesList').innerHTML = '';
+            seenIds = {};
             showStatus('', '');
             var url = new URL(window.location);
             url.searchParams.set('room', roomId);
             window.history.replaceState({}, '', url);
-            setTimeout(function() { document.getElementById('messageInput').focus(); }, 300);
+            setTimeout(function () {
+                document.getElementById('messageInput').focus();
+            }, 300);
         }
 
         // ============================================================
-        // 4. СЛУШАТЕЛЬ СООБЩЕНИЙ (Gun)
+        // 4. СЛУШАТЕЛЬ СООБЩЕНИЙ (Gun) — исправленная версия
         // ============================================================
         function listenMessages() {
-            if (listener) {
-                listener.off(); // отключаем предыдущий слушатель
-                listener = null;
+            if (!roomId) return;
+
+            // Отключаем предыдущий слушатель, если был
+            if (messagesRef && isListening) {
+                try {
+                    messagesRef.map().off();
+                } catch (e) {}
             }
-            messagesRef = gun.get(roomId).get('messages');
-            // Слушаем добавление новых сообщений
-            messagesRef.map().on(function(msg, id) {
-                if (msg) {
-                    // Проверяем, не отображается ли уже это сообщение
-                    var existing = document.querySelector('[data-id="' + id + '"]');
-                    if (!existing) {
-                        displayMessage(msg, id);
-                    }
-                }
-            });
-            // Также загружаем уже существующие сообщения (если есть)
-            messagesRef.map().once(function(msg, id) {
-                if (msg) {
-                    var existing = document.querySelector('[data-id="' + id + '"]');
-                    if (!existing) {
-                        displayMessage(msg, id);
-                    }
-                }
+
+            seenIds = {};
+            isListening = true;
+
+            // Путь: gun → roomId → messages
+            messagesRef = gun.get('chat_' + roomId).get('messages');
+
+            // Слушаем все сообщения в реальном времени + загружаем историю
+            messagesRef.map().on(function (msg, id) {
+                if (!msg || !msg.text || !msg.sender) return;
+                if (seenIds[id]) return;          // уже показали
+
+                seenIds[id] = true;
+                displayMessage(msg, id);
             });
         }
 
@@ -677,15 +688,25 @@
             var input = document.getElementById('messageInput');
             var text = input.value.trim();
             if (!text) return;
-            if (!roomId) { addSystemMessage('❌ Вы не в комнате'); return; }
+            if (!roomId || !messagesRef) {
+                addSystemMessage('❌ Вы не в комнате');
+                return;
+            }
+
             var msg = {
                 sender: username,
                 text: text,
-                time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+                time: new Date().toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }),
                 timestamp: Date.now()
             };
-            // Сохраняем в Gun
+
+            // .set() создаёт уникальный id и сохраняет сообщение
+            // Благодаря peers оно уйдёт ко всем участникам комнаты
             messagesRef.set(msg);
+
             input.value = '';
             input.focus();
         }
@@ -697,15 +718,17 @@
             var container = document.getElementById('messagesList');
             var div = document.createElement('div');
             var isOwn = message.sender === username;
+
             div.className = 'message ' + (isOwn ? 'message-own' : 'message-other');
             div.setAttribute('data-id', id || '');
-            div.innerHTML = `
-                <div class="message-header">
-                    <span class="message-sender">${isOwn ? 'Вы' : escapeHtml(message.sender)}</span>
-                    <span>${message.time || ''}</span>
-                </div>
-                <div class="message-text">${escapeHtml(message.text)}</div>
-            `;
+
+            div.innerHTML =
+                '<div class="message-header">' +
+                    '<span class="message-sender">' + (isOwn ? 'Вы' : escapeHtml(message.sender)) + '</span>' +
+                    '<span>' + (message.time || '') + '</span>' +
+                '</div>' +
+                '<div class="message-text">' + escapeHtml(message.text) + '</div>';
+
             container.appendChild(div);
             scrollToBottom();
         }
@@ -727,7 +750,9 @@
 
         function scrollToBottom() {
             var container = document.getElementById('messagesContainer');
-            setTimeout(function() { container.scrollTop = container.scrollHeight; }, 50);
+            setTimeout(function () {
+                container.scrollTop = container.scrollHeight;
+            }, 50);
         }
 
         // ============================================================
@@ -735,13 +760,13 @@
         // ============================================================
         function copyRoomCode() {
             var url = window.location.origin + window.location.pathname + '?room=' + roomId;
-            navigator.clipboard.writeText(url).then(function() {
+            navigator.clipboard.writeText(url).then(function () {
                 showStatus('📋 Ссылка скопирована!', 'success');
-                setTimeout(function() { showStatus('', ''); }, 2000);
-            }).catch(function() {
-                navigator.clipboard.writeText(roomId).then(function() {
+                setTimeout(function () { showStatus('', ''); }, 2000);
+            }).catch(function () {
+                navigator.clipboard.writeText(roomId).then(function () {
                     showStatus('📋 Код скопирован!', 'success');
-                    setTimeout(function() { showStatus('', ''); }, 2000);
+                    setTimeout(function () { showStatus('', ''); }, 2000);
                 });
             });
         }
@@ -751,20 +776,20 @@
             var body = document.getElementById('modalBody');
             var title = document.getElementById('modalTitle');
             var url = window.location.origin + window.location.pathname + '?room=' + roomId;
+
             title.textContent = '📤 Пригласить в комнату';
-            body.innerHTML = `
-                <p style="margin-bottom:10px;color:#6b7280;font-size:14px;">Отправьте ссылку друзьям:</p>
-                <div class="share-box">
-                    <input type="text" id="shareLink" value="${url}" readonly>
-                    <button class="btn btn-primary btn-small" onclick="copyShareLink()">📋</button>
-                </div>
-                <p style="margin-top:10px;font-size:12px;color:#9ca3af;">Код комнаты: <strong>${roomId}</strong></p>
-                <div class="share-buttons">
-                    <button class="btn btn-success btn-small" onclick="shareViaWhatsApp('${url}')">WhatsApp</button>
-                    <button class="btn btn-primary btn-small" onclick="shareViaTelegram('${url}')">Telegram</button>
-                    <button class="btn btn-small" style="background:#1da1f2;color:white;" onclick="shareViaTwitter('${url}')">Twitter</button>
-                </div>
-            `;
+            body.innerHTML =
+                '<p style="margin-bottom:10px;color:#6b7280;font-size:14px;">Отправьте ссылку друзьям:</p>' +
+                '<div class="share-box">' +
+                    '<input type="text" id="shareLink" value="' + url + '" readonly>' +
+                    '<button class="btn btn-primary btn-small" onclick="copyShareLink()">📋</button>' +
+                '</div>' +
+                '<p style="margin-top:10px;font-size:12px;color:#9ca3af;">Код комнаты: <strong>' + roomId + '</strong></p>' +
+                '<div class="share-buttons">' +
+                    '<button class="btn btn-success btn-small" onclick="shareViaWhatsApp(\'' + url + '\')">WhatsApp</button>' +
+                    '<button class="btn btn-primary btn-small" onclick="shareViaTelegram(\'' + url + '\')">Telegram</button>' +
+                    '<button class="btn btn-small" style="background:#1da1f2;color:white;" onclick="shareViaTwitter(\'' + url + '\')">Twitter</button>' +
+                '</div>';
             modal.style.display = 'flex';
         }
 
@@ -773,7 +798,7 @@
             input.select();
             navigator.clipboard.writeText(input.value);
             showStatus('📋 Ссылка скопирована!', 'success');
-            setTimeout(function() { showStatus('', ''); }, 2000);
+            setTimeout(function () { showStatus('', ''); }, 2000);
             closeModal();
         }
 
@@ -782,13 +807,11 @@
         }
 
         function shareViaTelegram(url) {
-            window.open('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(
-                'Присоединяйся к чату!'), '_blank');
+            window.open('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent('Присоединяйся к чату!'), '_blank');
         }
 
         function shareViaTwitter(url) {
-            window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent('Присоединяйся к чату: ' + url),
-                '_blank');
+            window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent('Присоединяйся к чату: ' + url), '_blank');
         }
 
         function closeModal() {
@@ -799,25 +822,39 @@
         // 8. ОЧИСТКА ЧАТА И ВЫХОД
         // ============================================================
         function clearChat() {
-            if (confirm('🗑 Очистить все сообщения в комнате?')) {
-                messagesRef.put(null); // удаляем все сообщения
-                document.getElementById('messagesList').innerHTML = '';
-                addSystemMessage('🗑 Чат очищен');
+            if (!confirm('🗑 Очистить все сообщения в комнате?')) return;
+
+            // Удаляем все сообщения в Gun
+            if (messagesRef) {
+                messagesRef.map().once(function (data, id) {
+                    if (id) messagesRef.get(id).put(null);
+                });
             }
+
+            document.getElementById('messagesList').innerHTML = '';
+            seenIds = {};
+            addSystemMessage('🗑 Чат очищен');
         }
 
         function exitRoom() {
-            if (confirm('Выйти из комнаты?')) {
-                if (listener) { listener.off();
-                    listener = null; }
-                document.getElementById('loginScreen').style.display = 'flex';
-                document.getElementById('chatScreen').style.display = 'none';
-                roomId = '';
-                document.getElementById('roomInput').value = '';
-                var url = new URL(window.location);
-                url.searchParams.delete('room');
-                window.history.replaceState({}, '', url);
+            if (!confirm('Выйти из комнаты?')) return;
+
+            if (messagesRef && isListening) {
+                try {
+                    messagesRef.map().off();
+                } catch (e) {}
             }
+            isListening = false;
+            messagesRef = null;
+            roomId = '';
+
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('chatScreen').style.display = 'none';
+            document.getElementById('roomInput').value = '';
+
+            var url = new URL(window.location);
+            url.searchParams.delete('room');
+            window.history.replaceState({}, '', url);
         }
 
         // ============================================================
@@ -833,13 +870,14 @@
             var modal = document.getElementById('modal');
             var body = document.getElementById('modalBody');
             var title = document.getElementById('modalTitle');
-            var emojis = ['😊', '😂', '❤️', '🔥', '👍', '🎉', '😍', '🤣', '💪', '👏', '🙌', '✨', '🌟', '⭐', '🌈', '🎨', '🎮', '🚀',
-                '💻', '📱', '💡', '🎯', '🏆', '👑'
-            ];
+            var emojis = ['😊', '😂', '❤️', '🔥', '👍', '🎉', '😍', '🤣', '💪', '👏', '🙌', '✨', '🌟', '⭐', '🌈', '🎨', '🎮', '🚀', '💻', '📱', '💡', '🎯', '🏆', '👑'];
+
             title.textContent = '😊 Смайлики';
-            body.innerHTML = '<div class="emoji-grid">' + emojis.map(function(e) {
-                return '<button class="emoji-btn" onclick="insertEmoji(\'' + e + '\')">' + e + '</button>';
-            }).join('') + '</div>';
+            body.innerHTML = '<div class="emoji-grid">' +
+                emojis.map(function (e) {
+                    return '<button class="emoji-btn" onclick="insertEmoji(\'' + e + '\')">' + e + '</button>';
+                }).join('') +
+                '</div>';
             modal.style.display = 'flex';
         }
 
@@ -849,20 +887,33 @@
             closeModal();
         }
 
+        // Enter для отправки
+        document.getElementById('messageInput').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
         // ============================================================
         // 10. ЗАКРЫТИЕ МОДАЛКИ
         // ============================================================
-        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
-        document.getElementById('modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeModal();
+        });
+        document.getElementById('modal').addEventListener('click', function (e) {
+            if (e.target === this) closeModal();
+        });
 
         // ============================================================
         // 11. АВТОЗАГРУЗКА
         // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             var savedRoom = localStorage.getItem('chat_room');
             var savedName = localStorage.getItem('chat_username');
             var params = new URLSearchParams(window.location.search);
             var roomFromUrl = params.get('room');
+
             if (roomFromUrl) {
                 document.getElementById('roomInput').value = roomFromUrl.toUpperCase();
                 if (savedName) {
@@ -874,18 +925,10 @@
                 document.getElementById('usernameInput').value = savedName;
                 setTimeout(joinRoom, 300);
             }
-            document.addEventListener('click', function() {
-                if (document.getElementById('chatScreen').style.display === 'flex') {
-                    var input = document.getElementById('messageInput');
-                    if (document.activeElement !== input) {
-                        setTimeout(function() { input.focus(); }, 50);
-                    }
-                }
-            });
         });
 
         console.log('💬 Чат на Gun.js загружен!');
-        console.log('📱 Сообщения синхронизируются peer‑to‑peer');
+        console.log('📱 Сообщения синхронизируются peer‑to‑peer и сохраняются');
     </script>
 </body>
 </html>
