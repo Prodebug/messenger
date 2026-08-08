@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📱 Мессенджер</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #loginScreen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 16px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px 24px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo-icon {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .logo h1 {
+            font-size: 24px;
+            color: #1a1a2e;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .input-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .input-group input {
+            padding: 12px 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 16px;
+            background: #f9fafb;
+            outline: none;
+        }
+
+        .input-group input:focus {
+            border-color: #6c63ff;
+            background: white;
+        }
+
+        .btn {
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: #6c63ff;
+            color: white;
+        }
+
+        .btn-primary:active {
+            background: #5a52d5;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .status-message {
+            text-align: center;
+            font-size: 14px;
+            padding: 8px;
+            border-radius: 8px;
+            min-height: 36px;
+        }
+
+        .status-message.success {
+            color: #16a34a;
+            background: #dcfce7;
+        }
+
+        .status-message.error {
+            color: #dc2626;
+            background: #fee2e2;
+        }
+
+        .status-message.info {
+            color: #2563eb;
+            background: #dbeafe;
+        }
+
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        #chatScreen {
+            display: none;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+        }
+
+        .chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #6c63ff;
+            color: white;
+            flex-shrink: 0;
+            min-height: 56px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chat-title {
+            font-size: 17px;
+            font-weight: 600;
+        }
+
+        .btn-icon {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            font-size: 20px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            background: #f8fafc;
+        }
+
+        .messages-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .message {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 16px;
+            word-break: break-word;
+        }
+
+        .message-own {
+            align-self: flex-end;
+            background: #6c63ff;
+            color: white;
+        }
+
+        .message-other {
+            align-self: flex-start;
+            background: white;
+            color: #1a1a2e;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .message-private {
+            align-self: center;
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        .message-sender {
+            font-weight: 600;
+        }
+
+        .message-text {
+            font-size: 15px;
+            line-height: 1.4;
+        }
+
+        .system-message {
+            text-align: center;
+            color: #6b7280;
+            font-size: 13px;
+            padding: 6px 12px;
+            background: #f1f3f4;
+            border-radius: 12px;
+            align-self: center;
+            max-width: 90%;
+            font-style: italic;
+        }
+
+        .chat-footer {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            flex-shrink: 0;
+        }
+
+        .btn-emoji {
+            background: none;
+            border: none;
+            font-size: 24px;
+            padding: 4px 8px;
+            cursor: pointer;
+        }
+
+        .chat-footer input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 20px;
+            font-size: 16px;
+            outline: none;
+            background: #f9fafb;
+        }
+
+        .chat-footer input:focus {
+            border-color: #6c63ff;
+        }
+
+        .btn-send {
+            background: #6c63ff;
+            border: none;
+            color: white;
+            font-size: 20px;
+            padding: 10px 16px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6b7280;
+        }
+
+        .modal-body {
+            padding: 16px 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .user-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-bottom: 1px solid #f1f3f4;
+            cursor: pointer;
+        }
+
+        .user-item:active {
+            background: #f8fafc;
+        }
+
+        .user-action {
+            color: #6c63ff;
+        }
+
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+            padding: 8px 0;
+        }
+
+        .emoji-btn {
+            font-size: 28px;
+            padding: 10px;
+            border: none;
+            background: #f9fafb;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="loginScreen">
+        <div class="login-container">
+            <div class="logo">
+                <span class="logo-icon">💬</span>
+                <h1>Мессенджер</h1>
+                <p class="subtitle">Подключитесь к серверу</p>
+            </div>
+            
+            <div class="login-form">
+                <div class="input-group">
+                    <label>👤 Ваше имя</label>
+                    <input type="text" id="usernameInput" placeholder="Введите имя..." maxlength="20">
+                </div>
+                
+                <div class="input-group">
+                    <label>🌐 IP сервера</label>
+                    <input type="text" id="serverIpInput" placeholder="127.0.0.1" value="127.0.0.1">
+                </div>
+                
+                <div class="input-group">
+                    <label>🔌 Порт</label>
+                    <input type="number" id="portInput" value="5555">
+                </div>
+                
+                <button class="btn btn-primary" onclick="connect()">🔗 Подключиться</button>
+                
+                <div id="statusMessage" class="status-message"></div>
+            </div>
+            
+            <div class="footer">
+                <p>Ваш IP: <span id="localIpDisplay">Загрузка...</span></p>
+                <p style="margin-top: 8px; font-size: 11px; color: #9ca3af;">
+                    💡 Нужен работающий сервер на порту 5555
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="chatScreen">
+        <div class="chat-header">
+            <div class="header-left">
+                <span id="onlineStatus">🟢</span>
+                <span class="chat-title">Общий чат</span>
+            </div>
+            <div>
+                <button class="btn-icon" onclick="showUsers()">👥</button>
+                <button class="btn-icon" onclick="disconnect()">🚪</button>
+            </div>
+        </div>
+        
+        <div class="messages-container" id="messagesContainer">
+            <div id="messagesList" class="messages-list">
+                <div class="system-message">💡 Подключитесь к серверу</div>
+            </div>
+        </div>
+        
+        <div class="chat-footer">
+            <button class="btn-emoji" onclick="showEmoji()">😊</button>
+            <input type="text" id="messageInput" placeholder="Введите сообщение..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button class="btn-send" onclick="sendMessage()">📤</button>
+        </div>
+    </div>
+
+    <div id="usersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>👥 Пользователи</h3>
+                <button class="modal-close" onclick="closeUsers()">✕</button>
+            </div>
+            <div id="usersList" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="emojiModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>😊 Смайлики</h3>
+                <button class="modal-close" onclick="closeEmoji()">✕</button>
+            </div>
+            <div id="emojiList" class="modal-body emoji-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let username = '';
+        let connected = false;
+        let users = [];
+
+        async function getLocalIP() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                document.getElementById('localIpDisplay').textContent = data.ip;
+            } catch {
+                document.getElementById('localIpDisplay').textContent = 'Не определен';
+            }
+        }
+        getLocalIP();
+
+        function connect() {
+            username = document.getElementById('usernameInput').value.trim();
+            const serverIp = document.getElementById('serverIpInput').value.trim() || '127.0.0.1';
+            const port = parseInt(document.getElementById('portInput').value) || 5555;
+            
+            if (!username) {
+                showStatus('❌ Введите имя', 'error');
+                return;
+            }
+            
+            showStatus('🔄 Подключение...', 'info');
+            
+            if (ws) { ws.close(); ws = null; }
+            
+            try {
+                ws = new WebSocket(`ws://${serverIp}:${port}`);
+                
+                ws.onopen = function() {
+                    connected = true;
+                    showStatus('✅ Подключено!', 'success');
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('chatScreen').style.display = 'flex';
+                    document.getElementById('messagesList').innerHTML = '';
+                    ws.send(JSON.stringify({username: username}));
+                    addSystemMessage(`👋 Добро пожаловать, ${username}!`);
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        displayMessage(data);
+                    } catch (e) {
+                        console.error(e);
+                    }
+                };
+                
+                ws.onerror = function() {
+                    showStatus('❌ Ошибка подключения', 'error');
+                };
+                
+                ws.onclose = function() {
+                    connected = false;
+                    addSystemMessage('❌ Отключено');
+                    document.getElementById('loginScreen').style.display = 'flex';
+                    document.getElementById('chatScreen').style.display = 'none';
+                };
+                
+            } catch (e) {
+                showStatus('❌ Ошибка: ' + e.message, 'error');
+            }
+        }
+
+        function displayMessage(data) {
+            const container = document.getElementById('messagesList');
+            const div = document.createElement('div');
+            
+            if (data.type === 'message') {
+                const isOwn = data.sender === username;
+                div.className = `message ${isOwn ? 'message-own' : 'message-other'}`;
+                div.innerHTML = `
+                    <div class="message-header">
+                        <span class="message-sender">${isOwn ? 'Вы' : data.sender}</span>
+                        <span>${data.time || ''}</span>
+                    </div>
+                    <div class="message-text">${escapeHtml(data.message)}</div>
+                `;
+            } else if (data.type === 'private') {
+                div.className = 'message message-private';
+                div.innerHTML = `
+                    <div class="message-header">
+                        <span class="message-sender">🔒 Личное от ${data.sender}</span>
+                        <span>${data.time || ''}</span>
+                    </div>
+                    <div class="message-text">${escapeHtml(data.message)}</div>
+                `;
+            } else if (data.type === 'system') {
+                div.className = 'system-message';
+                div.textContent = data.message;
+            } else if (data.type === 'user_list') {
+                users = data.users;
+                updateUsersList(data.users);
+                return;
+            }
+            
+            container.appendChild(div);
+            scrollToBottom();
+        }
+
+        function addSystemMessage(text) {
+            const container = document.getElementById('messagesList');
+            const div = document.createElement('div');
+            div.className = 'system-message';
+            div.textContent = text;
+            container.appendChild(div);
+            scrollToBottom();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messagesContainer');
+            setTimeout(() => container.scrollTop = container.scrollHeight, 50);
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text) return;
+            if (!connected) { addSystemMessage('❌ Нет подключения'); return; }
+            ws.send(JSON.stringify({type: 'message', room: 'general', message: text}));
+            input.value = '';
+        }
+
+        function updateUsersList(users) {
+            const list = document.getElementById('usersList');
+            if (!users || users.length === 0) {
+                list.innerHTML = '<div class="user-item">Нет пользователей</div>';
+                return;
+            }
+            list.innerHTML = users.map(user => `
+                <div class="user-item" onclick="sendPrivate('${user}')">
+                    <span>${user === username ? '⭐' : '🟢'}</span>
+                    <span>${user}</span>
+                    ${user !== username ? '<span class="user-action">💬</span>' : ''}
+                </div>
+            `).join('');
+        }
+
+        function showUsers() { document.getElementById('usersModal').style.display = 'flex'; }
+        function closeUsers() { document.getElementById('usersModal').style.display = 'none'; }
+
+        function sendPrivate(target) {
+            closeUsers();
+            const message = prompt(`💬 Сообщение для ${target}:`);
+            if (message && message.trim() && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: 'private', target: target, message: message.trim()}));
+                addSystemMessage(`🔒 Личное для ${target}: ${message.trim()}`);
+            }
+        }
+
+        function showEmoji() {
+            const modal = document.getElementById('emojiModal');
+            const grid = document.getElementById('emojiList');
+            const emojis = ['😊','😂','❤️','🔥','👍','🎉','😍','🤣','💪','👏','🙌','✨','🌟','⭐','🌈','🎨'];
+            grid.innerHTML = emojis.map(e => `<button class="emoji-btn" onclick="insertEmoji('${e}')">${e}</button>`).join('');
+            modal.style.display = 'flex';
+        }
+
+        function closeEmoji() { document.getElementById('emojiModal').style.display = 'none'; }
+
+        function insertEmoji(emoji) {
+            document.getElementById('messageInput').value += emoji;
+            closeEmoji();
+            document.getElementById('messageInput').focus();
+        }
+
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = 'status-message ' + type;
+        }
+
+        function disconnect() {
+            if (ws) { ws.close(); ws = null; }
+            connected = false;
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('chatScreen').style.display = 'none';
+        }
+
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+        });
+
+        // Настройки по умолчанию
+        document.addEventListener('DOMContentLoaded', () => {
+            // Попробуем определить локальный IP
+            const ip = localStorage.getItem('server_ip');
+            if (ip) document.getElementById('serverIpInput').value = ip;
+        });
+    </script>
+</body>
+</html>
